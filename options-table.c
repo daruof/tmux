@@ -401,6 +401,21 @@ const struct options_table_entry options_table[] = {
 	          "these are only supported on terminals with UTF-8 support."
 	},
 
+	{ .name = "pane-history-dir",
+	  .type = OPTIONS_TABLE_STRING,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .default_str = "~/tmux_history"
+	},
+
+	{ .name = "pane-history-file",
+	  .type = OPTIONS_TABLE_STRING,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .default_str = "#{t/f/%Y%m%d:start_time}.#{b:socket_path}."
+			 "#{t/f/%Y%m%d:session_created}.#{session_name}."
+			 "#{t/f/%Y%m%d:window_created}.#{window_index}_#{window_name}."
+			 "pane_#{pane_index}.id#{window_id}#{pane_id}"
+	},
+
 	{ .name = "message-limit",
 	  .type = OPTIONS_TABLE_NUMBER,
 	  .scope = OPTIONS_TABLE_SERVER,

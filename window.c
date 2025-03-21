@@ -18,6 +18,7 @@
 
 #include <sys/types.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 
 #include <ctype.h>
 #include <errno.h>
@@ -330,6 +331,10 @@ window_create(u_int sx, u_int sy, u_int xpixel, u_int ypixel)
 
 	log_debug("%s: @%u create %ux%u (%ux%u)", __func__, w->id, sx, sy,
 	    w->xpixel, w->ypixel);
+
+	if (gettimeofday(&w->creation_time, NULL) != 0)
+		fatal("gettimeofday failed");
+
 	return (w);
 }
 
@@ -401,8 +406,15 @@ window_remove_ref(struct window *w, const char *from)
 void
 window_set_name(struct window *w, const char *new_name)
 {
+	struct window_pane	*wp;
+
 	free(w->name);
 	utf8_stravis(&w->name, new_name, VIS_OCTAL|VIS_CSTYLE|VIS_TAB|VIS_NL);
+
+	TAILQ_FOREACH(wp, &w->panes, entry) {
+		window_pane_set_hist_file(wp);
+	}
+
 	notify_window("window-renamed", w);
 }
 
@@ -985,6 +997,62 @@ window_pane_create(struct window *w, u_int sx, u_int sy, u_int hlimit)
 		screen_set_title(&wp->base, host);
 
 	return (wp);
+}
+
+void
+window_pane_set_hist_file(struct window_pane *wp)
+{
+	struct session		*s, *st;
+	struct winlink		*wl, *wlt;
+	struct format_tree	*ft;
+	const char		*template, *dir, *home;
+	char			*base, *expand_dir, *name, *p;
+
+	s = NULL;
+	wl = NULL;
+	wlt = NULL;
+	RB_FOREACH(st, sessions, &sessions) {
+		wlt = winlink_find_by_window(&st->windows, wp->window);
+		if (wlt) {
+			wl = wlt;
+			s = st;
+		}
+	}
+	if (!wl) {
+		log_debug("window_pane_set_hist_file: winlink not found");
+		return;
+	}
+
+	template = options_get_string(global_options, "pane-history-file");
+
+	ft = format_create(NULL, NULL, FORMAT_NONE, 0);
+	format_defaults(ft, NULL, s, wl, wp);
+	base = format_expand(ft, template);
+
+	/* Sanitise file name */
+	for (p = base; *p; p++) {
+		if (*p == '/' || *p == ' ' || *p == '@' || *p == '%')
+			*p = '_';
+	}
+
+	expand_dir = NULL;
+	dir = options_get_string(global_options, "pane-history-dir");
+	if (dir[0] == '~') {
+		home = find_home();
+		if (home) {
+			xasprintf(&expand_dir, "%s/%s", home, &dir[1]);
+			dir = expand_dir;
+		}
+	}
+
+	name = NULL;
+	if (mkdir(expand_dir, S_IRWXU) != 0 && errno != EEXIST) {
+	} else {
+		xasprintf(&name, "%s/%s", expand_dir, base);
+	}
+	free(base);
+	free(expand_dir);
+	grid_create_hist_file(wp->base.grid, name);
 }
 
 static void

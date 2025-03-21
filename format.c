@@ -2739,6 +2739,15 @@ format_cb_window_activity(struct format_tree *ft)
 	return (NULL);
 }
 
+/* Callback for window_created . */
+static void *
+format_cb_window_created(struct format_tree *ft)
+{
+	if (ft->w != NULL)
+		return (&ft->w->creation_time);
+	return (NULL);
+}
+
 /* Callback for buffer_mode_format, */
 static void *
 format_cb_buffer_mode_format(__unused struct format_tree *ft)
@@ -3240,6 +3249,9 @@ static const struct format_table_entry format_table[] = {
 	},
 	{ "window_cell_width", FORMAT_TABLE_STRING,
 	  format_cb_window_cell_width
+	},
+	{ "window_created", FORMAT_TABLE_TIME,
+	  format_cb_window_created
 	},
 	{ "window_end_flag", FORMAT_TABLE_STRING,
 	  format_cb_window_end_flag

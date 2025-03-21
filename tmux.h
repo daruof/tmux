@@ -814,6 +814,11 @@ struct grid_line {
 	time_t			 time;
 };
 
+struct grid_hist_file {
+	char			*name;
+	FILE			*file;
+};
+
 /* Entire grid of cells. */
 struct grid {
 	int			 flags;
@@ -825,6 +830,7 @@ struct grid {
 	u_int			 hscrolled;
 	u_int			 hsize;
 	u_int			 hlimit;
+	struct grid_hist_file	*hfile;
 
 	struct grid_line	*linedata;
 };
@@ -1228,6 +1234,7 @@ struct window {
 	struct event		 offset_timer;
 
 	struct timeval		 activity_time;
+	struct timeval		 creation_time;
 
 	struct window_pane	*active;
 	struct window_panes 	 last_panes;
@@ -2969,6 +2976,9 @@ int	 grid_cells_look_equal(const struct grid_cell *,
 struct grid *grid_create(u_int, u_int, u_int);
 void	 grid_destroy(struct grid *);
 int	 grid_compare(struct grid *, struct grid *);
+void 	 grid_create_hist_file(struct grid *, char *);
+void 	 grid_collect_file_history(struct grid *);
+void 	 grid_destroy_hist_file(struct grid *);
 void	 grid_collect_history(struct grid *);
 void	 grid_remove_history(struct grid *, u_int );
 void	 grid_scroll_history(struct grid *, u_int);
@@ -3205,6 +3215,7 @@ void		 window_destroy_panes(struct window *);
 struct window_pane *window_pane_find_by_id_str(const char *);
 struct window_pane *window_pane_find_by_id(u_int);
 int		 window_pane_destroy_ready(struct window_pane *);
+void 		 window_pane_set_hist_file(struct window_pane *);
 void		 window_pane_resize(struct window_pane *, u_int, u_int);
 int		 window_pane_set_mode(struct window_pane *,
 		     struct window_pane *, const struct window_mode *,

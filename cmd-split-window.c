@@ -173,6 +173,9 @@ cmd_split_window_exec(struct cmd *self, struct cmdq_item *item)
 			break;
 		}
 	}
+
+	window_pane_set_hist_file(new_wp);
+
 	if (!args_has(args, 'd'))
 		cmd_find_from_winlink_pane(current, wl, new_wp, 0);
 	window_pop_zoom(wp->window);

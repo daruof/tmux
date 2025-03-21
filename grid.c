@@ -20,6 +20,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #include "tmux.h"
 
@@ -315,6 +316,8 @@ grid_create(u_int sx, u_int sy, u_int hlimit)
 	else
 		gd->linedata = NULL;
 
+	gd->hfile = NULL;
+
 	return (gd);
 }
 
@@ -322,6 +325,8 @@ grid_create(u_int sx, u_int sy, u_int hlimit)
 void
 grid_destroy(struct grid *gd)
 {
+	grid_destroy_hist_file(gd);
+
 	grid_free_lines(gd, 0, gd->hsize + gd->sy);
 
 	free(gd->linedata);
@@ -365,6 +370,102 @@ grid_trim_history(struct grid *gd, u_int ny)
 	    (gd->hsize + gd->sy - ny) * (sizeof *gd->linedata));
 }
 
+void grid_create_hist_file(struct grid *gd, char *name)
+{
+	if (!gd->hfile) {
+		gd->hfile = xcalloc(1, sizeof *gd->hfile);
+		gd->hfile->name = NULL;
+		gd->hfile->file = NULL;
+	}
+
+	if (gd->hfile->file && gd->hfile->name && name) {
+		FILE *tmp;
+
+		log_debug("grid_create_hist_file: rename old %s new %s", gd->hfile->name, name);
+		/*
+		 * Try to prevent clobbering existing files. There is a small
+		 * chance if two tmux servers are running and an insufficiently
+		 * unique history file template is used that a file may still
+		 * be clobbered.
+		 */
+		tmp = fopen(name, "r");
+		if (tmp == NULL) {
+			if (rename(gd->hfile->name, name)) {
+				log_debug("%s: %s", name, strerror(errno));
+				free(name);
+			} else {
+				free(gd->hfile->name);
+				gd->hfile->name = name;
+			}
+		} else {
+			fclose(tmp);
+		}
+		return;
+	}
+
+	if (name) {
+		log_debug("grid_create_hist_file: create new %s", name);
+		gd->hfile->name = name;
+		/*
+		 * Append to existing files. If you start sequential tmux
+		 * server instances and set the template to match old history
+		 * files this will allow appending to those old history files.
+		 *
+		 * If you have two or more simultaneous tmux servers instances
+		 * and use an insufficiently unique history file template then
+		 * multiple servers may output to the same history file.
+		 */
+		gd->hfile->file = fopen(name, "a+");
+		if (gd->hfile->file == NULL) {
+			log_debug("%s: %s", name, strerror(errno));
+			free(gd->hfile->name);
+			gd->hfile->name = NULL;
+			gd->hfile->file = NULL;
+		}
+	}
+}
+
+void grid_collect_file_history(struct grid *gd)
+{
+	char			*line;
+	const struct grid_line	*gl;
+
+	if (gd->hfile && gd->hfile->file) {
+		line = grid_string_cells(gd, 0, gd->hsize, gd->sx,
+			NULL, 0, NULL);
+		fprintf(gd->hfile->file, "%s", line);
+		gl = grid_peek_line(gd, gd->hsize);
+		if (!(gl->flags & GRID_LINE_WRAPPED))
+			fputc('\n', gd->hfile->file);
+		free(line);
+	}
+}
+
+void grid_destroy_hist_file(struct grid *gd)
+{
+	char			*line;
+	u_int	 		yy;
+	const struct grid_line	*gl;
+
+	if (gd->hfile) {
+		if (gd->hfile->name) free(gd->hfile->name);
+		if (gd->hfile->file) {
+			/* dump final visible contents to hfile */
+			for (yy = gd->hsize; yy < gd->hsize + gd->sy; yy++) {
+				line = grid_string_cells(gd, 0, yy, gd->sx,
+					NULL, 0, NULL);
+				fprintf(gd->hfile->file, "%s", line);
+				gl = grid_peek_line(gd, gd->hsize);
+				if (!(gl->flags & GRID_LINE_WRAPPED))
+					fputc('\n', gd->hfile->file);
+				free(line);
+			}
+			fclose(gd->hfile->file);
+		}
+		free(gd->hfile);
+	}
+}
+
 /*
  * Collect lines from the history if at the limit. Free the top (oldest) 10%
  * and shift up.
@@ -373,6 +474,8 @@ void
 grid_collect_history(struct grid *gd)
 {
 	u_int	ny;
+
+	grid_collect_file_history(gd);
 
 	if (gd->hsize == 0 || gd->hsize < gd->hlimit)
 		return;

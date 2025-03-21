@@ -192,8 +192,10 @@ spawn_window(struct spawn_context *sc, char **cause)
 		session_select(s, sc->wl->idx);
 
 	/* Fire notification if new window. */
-	if (~sc->flags & SPAWN_RESPAWN)
+	if (~sc->flags & SPAWN_RESPAWN) {
 		notify_session_window("window-linked", s, w);
+		window_pane_set_hist_file(w->active);
+	}
 
 	session_group_synchronize_from(s);
 	return (sc->wl);
